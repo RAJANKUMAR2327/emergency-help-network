@@ -23,7 +23,7 @@ const io = new Server(server, { cors: { origin: '*', methods: ['GET','POST'], cr
 setupSocket(io);
 app.set('io', io);
 app.use(helmet());
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({ origin: '*', credentials: true }));
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));

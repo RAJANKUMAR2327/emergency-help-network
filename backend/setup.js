@@ -326,6 +326,16 @@ if (!serverContent.includes('aiRoutes')) {
   fs.writeFileSync('src/server.js', serverContent, 'utf8');
   console.log('server.js updated with AI and hospital routes');
 }
+
+// Fix CORS in server.js
+// Fix CORS in server.js
+let corsServerJs = fs.readFileSync('src/server.js', 'utf8');
+corsServerJs = corsServerJs.replace(
+  "app.use(cors({ origin: '*', credentials: true }));",
+  "app.use(cors({ origin: true, credentials: true, methods: ['GET','POST','PUT','DELETE','OPTIONS'], allowedHeaders: ['Content-Type','Authorization','ngrok-skip-browser-warning'] }));"
+);
+fs.writeFileSync('src/server.js', corsServerJs, 'utf8');
+console.log('CORS fixed in server.js');
 console.log('User.js OK');
 console.log('auth route OK:', fs.statSync('src/routes/auth.js').size, 'bytes');S
 

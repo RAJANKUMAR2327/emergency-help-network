@@ -337,7 +337,7 @@ corsServerJs = corsServerJs.replace(
 fs.writeFileSync('src/server.js', corsServerJs, 'utf8');
 console.log('CORS fixed in server.js');
 console.log('User.js OK');
-console.log('auth route OK:', fs.statSync('src/routes/auth.js').size, 'bytes');S
+console.log('auth route OK:', fs.statSync('src/routes/auth.js').size, 'bytes');
 
 console.log('authController.js OK:', fs.statSync('src/controllers/authController.js').size, 'bytes');
 

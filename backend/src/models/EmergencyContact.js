@@ -11,6 +11,7 @@ const emergencyContactSchema = new mongoose.Schema(
       {
         name: { type: String, required: true },
         phone: { type: String, required: true },
+        email: { type: String, default: null },
         relationship: { type: String },
         notifyViaSMS: { type: Boolean, default: true },
         notifyViaWhatsApp: { type: Boolean, default: true },

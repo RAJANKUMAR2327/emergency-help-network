@@ -56,6 +56,10 @@ exports.sendTestAlert = async (req, res, next) => {
       result = await sendWhatsApp(phone, 'Test alert from Emergency Help Network.');
     } else if (channel === 'call') {
       result = await makeEmergencyCall(phone, req.user.name, 'other', 'test location');
+    } else if (channel === 'email') {
+      const { sendTestEmail } = require('../services/emailService');
+      result = await sendTestEmail(phone);
+
     } else {
       return res.status(400).json({ success: false, message: 'Invalid channel' });
     }

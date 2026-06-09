@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "0a892d7f-080f-4f1c-967e-13707fa5ae18"
+      }
+    },
+    "android": {
+      "package": "com.rajankumar2327.emergencyhelpnetwork"
+    }
+  }
+}

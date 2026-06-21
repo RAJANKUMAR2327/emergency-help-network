@@ -2,11 +2,12 @@ const { notifyEmergencyContacts } = require('./smsService');
 const { notifyViaWhatsApp } = require('./whatsappService');
 const { callEmergencyContacts } = require('./callService');
 const { notifyNearbyHelpers } = require('./pushNotificationService');
+const { notifyContactsViaEmail } = require('./emailService');
 const EmergencyContact = require('../models/EmergencyContact');
 const User = require('../models/User');
 
 const orchestrateNotifications = async (emergency, reporter) => {
-  const results = { sms: [], whatsapp: [], calls: [], push: null, errors: [] };
+  const results = { sms: [], whatsapp: [], calls: [], email: [], push: null, errors: [] };
   try {
     const contactDoc = await EmergencyContact.findOne({ user: reporter._id });
     const contacts = contactDoc ? contactDoc.contacts : [];
@@ -24,22 +25,25 @@ const orchestrateNotifications = async (emergency, reporter) => {
       },
     }).select('fcmToken name').limit(30);
 
-    const [smsR, waR, callR, pushR] = await Promise.allSettled([
+    const [smsR, waR, callR, emailR, pushR] = await Promise.allSettled([
       contacts.length > 0 ? notifyEmergencyContacts(contacts, emergency, reporter.name) : Promise.resolve([]),
       contacts.length > 0 ? notifyViaWhatsApp(contacts, emergency, reporter.name) : Promise.resolve([]),
       contacts.filter((c) => c.notifyViaCall).length > 0 ? callEmergencyContacts(contacts, emergency, reporter.name) : Promise.resolve([]),
+      contacts.filter((c) => c.email && c.notifyViaEmail).length > 0 ? notifyContactsViaEmail(contacts.filter((c) => c.notifyViaEmail), emergency, reporter.name) : Promise.resolve([]),
       nearbyHelpers.length > 0 ? notifyNearbyHelpers(nearbyHelpers, emergency) : Promise.resolve({ success: false, reason: 'No nearby helpers' }),
     ]);
 
     results.sms = smsR.status === 'fulfilled' ? smsR.value : [];
     results.whatsapp = waR.status === 'fulfilled' ? waR.value : [];
     results.calls = callR.status === 'fulfilled' ? callR.value : [];
+    results.email = emailR.status === 'fulfilled' ? emailR.value : [];
     results.push = pushR.status === 'fulfilled' ? pushR.value : null;
     results.summary = {
       contactsNotified: contacts.length,
       smsSent: results.sms.filter((r) => r.success).length,
       whatsappSent: results.whatsapp.filter((r) => r.success).length,
       callsMade: results.calls.filter((r) => r.success).length,
+      emailsSent: results.email.filter((r) => r.success).length,
       nearbyHelpersPushed: nearbyHelpers.length,
     };
     console.log('Notification summary:', results.summary);

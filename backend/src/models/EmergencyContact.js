@@ -10,7 +10,7 @@ const emergencyContactSchema = new mongoose.Schema(
     contacts: [
       {
         name: { type: String, required: true },
-        phone: { type: String, required: true },
+        phone: { type: String, default: null },
         email: { type: String, default: null },
         relationship: { type: String },
         notifyViaSMS: { type: Boolean, default: true },

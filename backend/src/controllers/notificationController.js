@@ -12,12 +12,12 @@ exports.getEmergencyContacts = async (req, res, next) => {
 
 exports.addEmergencyContact = async (req, res, next) => {
   try {
-    const { name, phone, relationship, notifyViaSMS, notifyViaWhatsApp, notifyViaCall } = req.body;
-    if (!name || !phone) return res.status(400).json({ success: false, message: 'Name and phone required' });
+    const { name, phone, email, relationship, notifyViaSMS, notifyViaWhatsApp, notifyViaCall, notifyViaEmail } = req.body;
+    if (!name || (!phone && !email)) return res.status(400).json({ success: false, message: 'Name and at least one of phone or email is required' });
     let doc = await EmergencyContact.findOne({ user: req.user._id });
     if (!doc) doc = await EmergencyContact.create({ user: req.user._id, contacts: [] });
     if (doc.contacts.length >= 5) return res.status(400).json({ success: false, message: 'Maximum 5 contacts allowed' });
-    doc.contacts.push({ name, phone, relationship, notifyViaSMS: notifyViaSMS !== false, notifyViaWhatsApp: notifyViaWhatsApp !== false, notifyViaCall: notifyViaCall === true });
+    doc.contacts.push({ name, phone, email, relationship, notifyViaSMS: notifyViaSMS !== false, notifyViaWhatsApp: notifyViaWhatsApp !== false, notifyViaCall: notifyViaCall === true, notifyViaEmail: notifyViaEmail !== false });
     await doc.save();
     res.status(201).json({ success: true, data: doc.contacts });
   } catch (e) { next(e); }

@@ -7,6 +7,9 @@
     },
     "android": {
       "package": "com.rajankumar2327.emergencyhelpnetwork"
-    }
+    },
+    "slug": "emergency-help-network",
+    "name": "Emergency Help Network",
+    "version": "1.0.0"
   }
 }

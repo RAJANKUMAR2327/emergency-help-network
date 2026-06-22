@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Emergency Help Network",
+    "slug": "emergency-help-network",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.rajankumar2327.emergencyhelpnetwork",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyCb-mLbze5vwXxcdlaYjvxpNkWUN7zMprQ"
+        }
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "0a892d7f-080f-4f1c-967e-13707fa5ae18"
+      }
+    }
+  }
+}

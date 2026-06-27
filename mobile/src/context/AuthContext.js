@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import { authAPI } from '../api/client';
 
 const AuthContext = createContext(null);
@@ -22,9 +23,20 @@ export const AuthProvider = ({ children }) => {
         setUser(JSON.parse(storedUser));
       }
     } catch (e) {
-      console.log('Auth load error:', e);
+      // Storage read failed — start fresh
     } finally {
       setLoading(false);
+    }
+  };
+
+  const registerPushToken = async () => {
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== 'granted') return;
+      const tokenData = await Notifications.getExpoPushTokenAsync();
+      await authAPI.updateFCMToken({ token: tokenData.data });
+    } catch (e) {
+      // Push token registration is non-critical — fail silently
     }
   };
 
@@ -35,6 +47,7 @@ export const AuthProvider = ({ children }) => {
     await AsyncStorage.setItem('user', JSON.stringify(u));
     setToken(t);
     setUser(u);
+    registerPushToken(); // fire-and-forget, non-blocking
     return u;
   };
 
@@ -45,7 +58,16 @@ export const AuthProvider = ({ children }) => {
     await AsyncStorage.setItem('user', JSON.stringify(u));
     setToken(t);
     setUser(u);
+    registerPushToken(); // fire-and-forget, non-blocking
     return u;
+  };
+
+  const updateUser = (updatedFields) => {
+    setUser((prev) => {
+      const next = { ...prev, ...updatedFields };
+      AsyncStorage.setItem('user', JSON.stringify(next));
+      return next;
+    });
   };
 
   const logout = async () => {
@@ -56,7 +78,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

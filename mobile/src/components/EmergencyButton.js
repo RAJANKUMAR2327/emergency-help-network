@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, Animated, StyleSheet, Alert, Vibration } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, TouchableOpacity, Animated, StyleSheet, Vibration } from 'react-native';
 
 const EmergencyButton = ({ onPress, disabled }) => {
   const [pressing, setPressing] = useState(false);
@@ -8,18 +8,30 @@ const EmergencyButton = ({ onPress, disabled }) => {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef(null);
   const countRef = useRef(null);
+  const pulseRef = useRef(null);    // store animation so we can stop it on unmount
+  const pressingRef = useRef(false); // ref mirror of pressing state to avoid stale closures
 
-  React.useEffect(() => {
-    Animated.loop(
+  useEffect(() => {
+    // Store animation reference for cleanup
+    pulseRef.current = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1.08, duration: 800, useNativeDriver: true }),
         Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
       ])
-    ).start();
+    );
+    pulseRef.current.start();
+
+    return () => {
+      // Stop animation on unmount to prevent setState on unmounted component
+      pulseRef.current?.stop();
+      clearTimeout(timerRef.current);
+      clearInterval(countRef.current);
+    };
   }, []);
 
   const handlePressIn = () => {
     if (disabled) return;
+    pressingRef.current = true;
     setPressing(true);
     setCountdown(3);
     Vibration.vibrate(100);
@@ -41,7 +53,9 @@ const EmergencyButton = ({ onPress, disabled }) => {
   };
 
   const handlePressOut = () => {
-    if (!pressing) return;
+    // Use ref (not state) to check pressing to avoid stale closure race condition
+    if (!pressingRef.current) return;
+    pressingRef.current = false;
     setPressing(false);
     setCountdown(3);
     clearTimeout(timerRef.current);
@@ -50,6 +64,7 @@ const EmergencyButton = ({ onPress, disabled }) => {
   };
 
   const handleTrigger = () => {
+    pressingRef.current = false;
     setPressing(false);
     Vibration.vibrate([0, 200, 100, 200]);
     onPress();
@@ -60,17 +75,23 @@ const EmergencyButton = ({ onPress, disabled }) => {
       <Animated.View style={[styles.outerRing, { transform: [{ scale: pulseAnim }] }]}>
         <Animated.View style={[styles.innerRing, { transform: [{ scale: scaleAnim }] }]}>
           <TouchableOpacity
-            style={[styles.button, pressing && styles.buttonPressed, disabled && styles.buttonDisabled]}
+            style={[
+              styles.button,
+              pressing && styles.buttonPressed,
+              disabled && styles.buttonDisabled,
+            ]}
             onPressIn={handlePressIn}
             onPressOut={handlePressOut}
             activeOpacity={1}
             disabled={disabled}
+            accessibilityLabel="SOS emergency button. Hold for 3 seconds to trigger."
+            accessibilityRole="button"
           >
             <Text style={styles.sos}>SOS</Text>
             {pressing ? (
               <Text style={styles.countdownText}>{countdown}</Text>
             ) : (
-              <Text style={styles.holdText}>Hold 3 sec</Text>
+              <Text style={styles.holdText}>{disabled ? 'Sending…' : 'Hold 3 sec'}</Text>
             )}
           </TouchableOpacity>
         </Animated.View>
@@ -81,9 +102,19 @@ const EmergencyButton = ({ onPress, disabled }) => {
 
 const styles = StyleSheet.create({
   wrapper: { alignItems: 'center', justifyContent: 'center' },
-  outerRing: { width: 240, height: 240, borderRadius: 120, backgroundColor: 'rgba(220,38,38,0.15)', alignItems: 'center', justifyContent: 'center' },
-  innerRing: { width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(220,38,38,0.25)', alignItems: 'center', justifyContent: 'center' },
-  button: { width: 160, height: 160, borderRadius: 80, backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center', elevation: 8, shadowColor: '#DC2626', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 8 },
+  outerRing: {
+    width: 240, height: 240, borderRadius: 120,
+    backgroundColor: 'rgba(220,38,38,0.15)', alignItems: 'center', justifyContent: 'center',
+  },
+  innerRing: {
+    width: 200, height: 200, borderRadius: 100,
+    backgroundColor: 'rgba(220,38,38,0.25)', alignItems: 'center', justifyContent: 'center',
+  },
+  button: {
+    width: 160, height: 160, borderRadius: 80, backgroundColor: '#DC2626',
+    alignItems: 'center', justifyContent: 'center', elevation: 8,
+    shadowColor: '#DC2626', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 8,
+  },
   buttonPressed: { backgroundColor: '#991B1B' },
   buttonDisabled: { backgroundColor: '#9CA3AF' },
   sos: { fontSize: 42, fontWeight: 'bold', color: '#fff', letterSpacing: 4 },

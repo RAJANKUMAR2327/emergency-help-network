@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
+import { SOCKET_URL } from '../api/client';
 
 const EmergencyContext = createContext(null);
 
@@ -13,36 +14,74 @@ export const EmergencyProvider = ({ children }) => {
 
   useEffect(() => {
     if (!token) return;
-    const socket = io('https://ehn-api-proxy.rajankumar20030306.workers.dev', { auth: { token } });
+
+    // Connect directly to Railway backend — Cloudflare Workers don't support
+    // WebSocket upgrades without Durable Objects
+    const socket = io(SOCKET_URL, {
+      auth: { token },
+      transports: ['websocket'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
+    });
     socketRef.current = socket;
 
-    socket.on('connect', () => console.log('Socket connected'));
     socket.on('new_emergency', (data) => {
       setNearbyEmergencies((prev) => [data, ...prev.slice(0, 9)]);
     });
-    socket.on('disconnect', () => console.log('Socket disconnected'));
 
-    return () => socket.disconnect();
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
   }, [token]);
 
   const joinEmergencyRoom = (emergencyId) => {
-    socketRef.current?.emit('join_emergency_room', emergencyId);
-    socketRef.current?.on('responder_moved', (data) => {
+    const socket = socketRef.current;
+    if (!socket) return;
+
+    socket.emit('join_emergency_room', emergencyId);
+
+    // Remove stale listeners before re-adding to prevent duplicates on re-navigation
+    socket.off('responder_moved');
+    socket.off('emergency_resolved');
+
+    socket.on('responder_moved', (data) => {
       setResponders((prev) => {
-        const existing = prev.findIndex((r) => r.userId === data.userId);
-        if (existing >= 0) {
+        const idx = prev.findIndex((r) => r.userId === data.userId);
+        if (idx >= 0) {
           const updated = [...prev];
-          updated[existing] = data;
+          updated[idx] = data;
           return updated;
         }
         return [...prev, data];
       });
     });
-    socketRef.current?.on('emergency_resolved', () => setActiveEmergency(null));
+
+    socket.on('emergency_resolved', () => {
+      setActiveEmergency(null);
+      setResponders([]);
+    });
+  };
+
+  const leaveEmergencyRoom = (emergencyId) => {
+    const socket = socketRef.current;
+    if (!socket) return;
+    socket.emit('leave_emergency_room', emergencyId);
+    socket.off('responder_moved');
+    socket.off('emergency_resolved');
+    setResponders([]);
   };
 
   return (
-    <EmergencyContext.Provider value={{ activeEmergency, setActiveEmergency, nearbyEmergencies, responders, joinEmergencyRoom }}>
+    <EmergencyContext.Provider value={{
+      activeEmergency,
+      setActiveEmergency,
+      nearbyEmergencies,
+      responders,
+      joinEmergencyRoom,
+      leaveEmergencyRoom,
+    }}>
       {children}
     </EmergencyContext.Provider>
   );

@@ -1,22 +1,50 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { emergencyAPI } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useEmergency } from '../context/EmergencyContext';
 
 export default function MapScreen({ route, navigation }) {
   const { emergencyId } = route.params || {};
   const { user } = useAuth();
+  const { responders, joinEmergencyRoom, leaveEmergencyRoom } = useEmergency();
   const [emergency, setEmergency] = useState(null);
-  const [myLocation, setMyLocation] = useState(null);
+  const [loading, setLoading] = useState(true);
   const mapRef = useRef(null);
+  const locationSubscription = useRef(null); // store watcher so we can clean it up
 
   useEffect(() => {
-    if (emergencyId) {
-      fetchEmergency();
-      startLocationTracking();
+    if (!emergencyId) return;
+    fetchEmergency();
+    startLocationTracking();
+    joinEmergencyRoom(emergencyId);
+
+    return () => {
+      // Clean up location watcher to prevent leaks
+      locationSubscription.current?.remove();
+      leaveEmergencyRoom(emergencyId);
+    };
+  }, [emergencyId]);
+
+  // Pan map to victim when emergency data arrives
+  useEffect(() => {
+    if (!emergency) return;
+    const coords = emergency?.location?.coordinates;
+    if (coords && mapRef.current) {
+      mapRef.current.animateToRegion(
+        { latitude: coords[1], longitude: coords[0], latitudeDelta: 0.01, longitudeDelta: 0.01 },
+        800
+      );
     }
+  }, [emergency]);
+
+  // Re-fetch periodically so responder count and status stay fresh
+  useEffect(() => {
+    if (!emergencyId) return;
+    const interval = setInterval(fetchEmergency, 15000);
+    return () => clearInterval(interval);
   }, [emergencyId]);
 
   const fetchEmergency = async () => {
@@ -25,6 +53,8 @@ export default function MapScreen({ route, navigation }) {
       setEmergency(res.data.data);
     } catch (e) {
       Alert.alert('Error', 'Could not load emergency details');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -32,12 +62,20 @@ export default function MapScreen({ route, navigation }) {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') return;
 
-    await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 5 }, async (loc) => {
-      setMyLocation(loc.coords);
-      try {
-        await emergencyAPI.updateLocation(emergencyId, { latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-      } catch (e) {}
-    });
+    // Store subscription reference for cleanup
+    locationSubscription.current = await Location.watchPositionAsync(
+      { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 5 },
+      async (loc) => {
+        try {
+          await emergencyAPI.updateLocation(emergencyId, {
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          });
+        } catch (e) {
+          // Location update failure is non-critical
+        }
+      }
+    );
   };
 
   const victimCoords = emergency?.location?.coordinates
@@ -49,36 +87,83 @@ export default function MapScreen({ route, navigation }) {
       <MapView
         ref={mapRef}
         style={styles.map}
-        initialRegion={victimCoords ? { ...victimCoords, latitudeDelta: 0.01, longitudeDelta: 0.01 } : { latitude: 25.5941, longitude: 85.1376, latitudeDelta: 0.05, longitudeDelta: 0.05 }}
+        // Use a stable default region — animateToRegion() in useEffect will move it once data loads
+        initialRegion={{ latitude: 20.5937, longitude: 78.9629, latitudeDelta: 5, longitudeDelta: 5 }}
         showsUserLocation
         showsMyLocationButton
       >
         {victimCoords && (
-          <Marker coordinate={victimCoords} title="Victim Location" description={emergency?.reporter?.name} pinColor="red">
+          <Marker
+            coordinate={victimCoords}
+            title="Victim Location"
+            description={emergency?.reporter?.name}
+            pinColor="red"
+          >
             <Text style={{ fontSize: 32 }}>🆘</Text>
           </Marker>
         )}
-        {emergency?.responders?.map((r, i) => r.currentLocation?.coordinates && (
-          <Marker key={i} coordinate={{ latitude: r.currentLocation.coordinates[1], longitude: r.currentLocation.coordinates[0] }} title={r.user?.name || 'Helper'} pinColor="blue">
-            <Text style={{ fontSize: 24 }}>🏃</Text>
-          </Marker>
-        ))}
+        {responders.map((r) =>
+          r.currentLocation?.coordinates ? (
+            <Marker
+              key={r.userId} // stable key — not array index
+              coordinate={{
+                latitude: r.currentLocation.coordinates[1],
+                longitude: r.currentLocation.coordinates[0],
+              }}
+              title={r.name || 'Helper'}
+              pinColor="blue"
+            >
+              <Text style={{ fontSize: 24 }}>🏃</Text>
+            </Marker>
+          ) : null
+        )}
+        {/* Also show responders from polled emergency data as fallback */}
+        {!responders.length && emergency?.responders?.map((r) =>
+          r.currentLocation?.coordinates ? (
+            <Marker
+              key={r._id || r.user?._id}
+              coordinate={{
+                latitude: r.currentLocation.coordinates[1],
+                longitude: r.currentLocation.coordinates[0],
+              }}
+              title={r.user?.name || 'Helper'}
+              pinColor="blue"
+            >
+              <Text style={{ fontSize: 24 }}>🏃</Text>
+            </Marker>
+          ) : null
+        )}
       </MapView>
 
       <View style={styles.infoCard}>
-        {emergency ? (
+        {loading ? (
+          <ActivityIndicator size="small" color="#DC2626" />
+        ) : emergency ? (
           <>
-            <Text style={styles.emergencyType}>{emergency.type?.toUpperCase().replace('_', ' ')} • {emergency.status?.toUpperCase()}</Text>
-            <Text style={styles.reporter}>👤 {emergency.reporter?.name} • {emergency.reporter?.phone}</Text>
-            {emergency.reporter?.bloodGroup && <Text style={styles.blood}>🩸 Blood: {emergency.reporter.bloodGroup}</Text>}
-            <Text style={styles.responders}>👥 {emergency.responders?.length || 0} helper(s) responding</Text>
+            <Text style={styles.emergencyType}>
+              {emergency.type?.toUpperCase().replace('_', ' ')} • {emergency.status?.toUpperCase()}
+            </Text>
+            <Text style={styles.reporter}>
+              👤 {emergency.reporter?.name} • {emergency.reporter?.phone}
+            </Text>
+            {emergency.reporter?.bloodGroup && (
+              <Text style={styles.blood}>🩸 Blood: {emergency.reporter.bloodGroup}</Text>
+            )}
+            <Text style={styles.responders}>
+              👥 {emergency.responders?.length || 0} helper(s) responding
+            </Text>
           </>
         ) : (
-          <Text style={styles.loading}>Loading emergency details...</Text>
+          <Text style={styles.loading}>Could not load emergency details</Text>
         )}
       </View>
 
-      <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+      <TouchableOpacity
+        style={styles.backBtn}
+        onPress={() => navigation.goBack()}
+        accessibilityLabel="Go back"
+        accessibilityRole="button"
+      >
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
     </View>
@@ -88,12 +173,21 @@ export default function MapScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
-  infoCard: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#fff', padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20, elevation: 10 },
+  infoCard: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: '#fff', padding: 20,
+    borderTopLeftRadius: 20, borderTopRightRadius: 20, elevation: 10,
+    minHeight: 80, justifyContent: 'center',
+  },
   emergencyType: { fontSize: 18, fontWeight: 'bold', color: '#DC2626', marginBottom: 6 },
   reporter: { fontSize: 14, color: '#333', marginBottom: 4 },
   blood: { fontSize: 14, color: '#DC2626', marginBottom: 4 },
   responders: { fontSize: 13, color: '#666' },
   loading: { textAlign: 'center', color: '#666' },
-  backBtn: { position: 'absolute', top: 48, left: 16, backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, elevation: 4 },
+  backBtn: {
+    position: 'absolute', top: 48, left: 16,
+    backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 20, elevation: 4,
+  },
   backText: { fontWeight: 'bold', color: '#111' },
 });

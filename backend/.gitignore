@@ -1,0 +1,28 @@
+node_modules/
+.env
+*.json.bak
+uploads/
+
+# Firebase service account — NEVER commit this
+firebase-service-account.json
+*-firebase-adminsdk-*.json
+
+# One-off patch scripts
+addEmailToggle.js
+fixContactValidation.js
+fixEmailDestructure.js
+fixEmailIPv4.js
+fixPhoneSchema.js
+wireEmailIntoOrchestrator.js
+writeAI.js
+writeServer.js
+setup.js
+
+# Windows artifacts
+ngrok.exe
+*.exe
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*

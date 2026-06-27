@@ -1,15 +1,74 @@
 {
   "expo": {
+    "name": "Emergency Help Network",
+    "slug": "emergency-help-network",
+    "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "scheme": "emergencyhelpnetwork",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#DC2626"
+    },
+    "notification": {
+      "icon": "./assets/android-icon-foreground.png",
+      "color": "#DC2626",
+      "androidMode": "default"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Emergency Help Network needs your location to alert nearby helpers and dispatch responders to you.",
+          "locationWhenInUsePermission": "Emergency Help Network needs your location to alert nearby helpers and dispatch responders to you.",
+          "isIosBackgroundLocationEnabled": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/android-icon-foreground.png",
+          "color": "#DC2626",
+          "defaultChannel": "emergency"
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.rajankumar2327.emergencyhelpnetwork",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Emergency Help Network needs your location to alert nearby helpers and dispatch responders to you.",
+        "NSLocationAlwaysUsageDescription": "Emergency Help Network needs your location to alert nearby helpers and dispatch responders to you."
+      }
+    },
+    "android": {
+      "package": "com.rajankumar2327.emergencyhelpnetwork",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED",
+        "POST_NOTIFICATIONS"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "GOOGLE_MAPS_API_KEY_HERE"
+        }
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
     "extra": {
       "eas": {
         "projectId": "0a892d7f-080f-4f1c-967e-13707fa5ae18"
       }
-    },
-    "android": {
-      "package": "com.rajankumar2327.emergencyhelpnetwork"
-    },
-    "slug": "emergency-help-network",
-    "name": "Emergency Help Network",
-    "version": "1.0.0"
+    }
   }
 }

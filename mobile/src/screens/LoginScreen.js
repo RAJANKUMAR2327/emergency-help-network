@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, StatusBar, Dimensions } from 'react-native';
+import {
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  Alert, ActivityIndicator, KeyboardAvoidingView, Platform, StatusBar,
+} from 'react-native';
 import { useAuth } from '../context/AuthContext';
 const { colors, shadows } = require('../theme');
-
-const { width, height } = Dimensions.get('window');
 
 export default function LoginScreen({ navigation }) {
   const { login } = useAuth();
@@ -25,9 +26,12 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
-      
+
       <View style={styles.header}>
         <View style={styles.logoContainer}>
           <Text style={styles.logoEmoji}>🆘</Text>
@@ -52,6 +56,7 @@ export default function LoginScreen({ navigation }) {
               onChangeText={setPhone}
               keyboardType="phone-pad"
               autoCapitalize="none"
+              accessibilityLabel="Phone number input"
             />
           </View>
         </View>
@@ -67,19 +72,39 @@ export default function LoginScreen({ navigation }) {
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
+              accessibilityLabel="Password input"
             />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <TouchableOpacity
+              onPress={() => setShowPassword(!showPassword)}
+              accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+              accessibilityRole="button"
+            >
               <Text style={styles.eyeIcon}>{showPassword ? '🙈' : '👁️'}</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        <TouchableOpacity style={[styles.loginBtn, loading && styles.loginBtnDisabled]} onPress={handleLogin} disabled={loading}>
-          {loading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.loginBtnText}>Sign In →</Text>}
+        <TouchableOpacity
+          style={[styles.loginBtn, loading && styles.loginBtnDisabled]}
+          onPress={handleLogin}
+          disabled={loading}
+          accessibilityLabel="Sign in"
+          accessibilityRole="button"
+        >
+          {loading ? (
+            <ActivityIndicator color={colors.white} />
+          ) : (
+            <Text style={styles.loginBtnText}>Sign In →</Text>
+          )}
         </TouchableOpacity>
 
-        <TouchableOpacity style={{ marginTop: 16, padding: 14, borderRadius: 14, borderWidth: 2, borderColor: colors.primary, alignItems: 'center' }} onPress={() => navigation.navigate('Register')}>
-          <Text style={{ color: colors.primary, fontSize: 16, fontWeight: 'bold' }}>Create New Account</Text>
+        <TouchableOpacity
+          style={styles.registerBtn}
+          onPress={() => navigation.navigate('Register')}
+          accessibilityLabel="Create new account"
+          accessibilityRole="button"
+        >
+          <Text style={styles.registerBtnText}>Create New Account</Text>
         </TouchableOpacity>
       </View>
 
@@ -93,25 +118,39 @@ export default function LoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.primary },
   header: { alignItems: 'center', paddingTop: 60, paddingBottom: 32 },
-  logoContainer: { width: 80, height: 80, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  logoContainer: {
+    width: 80, height: 80, borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+  },
   logoEmoji: { fontSize: 40 },
   appName: { fontSize: 24, fontWeight: 'bold', color: colors.white, textAlign: 'center' },
   tagline: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
-  card: { flex: 1, backgroundColor: colors.white, borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 28, ...shadows.lg },
+  card: {
+    flex: 1, backgroundColor: colors.white, borderTopLeftRadius: 32,
+    borderTopRightRadius: 32, padding: 28, ...shadows.lg,
+  },
   welcomeText: { fontSize: 26, fontWeight: 'bold', color: colors.gray900, marginBottom: 4 },
   subText: { fontSize: 14, color: colors.gray500, marginBottom: 28 },
   inputContainer: { marginBottom: 16 },
   inputLabel: { fontSize: 13, fontWeight: '600', color: colors.gray700, marginBottom: 6 },
-  inputWrapper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: colors.gray200, borderRadius: 12, paddingHorizontal: 14, backgroundColor: colors.gray50 },
+  inputWrapper: {
+    flexDirection: 'row', alignItems: 'center', borderWidth: 1.5,
+    borderColor: colors.gray200, borderRadius: 12, paddingHorizontal: 14, backgroundColor: colors.gray50,
+  },
   inputIcon: { fontSize: 16, marginRight: 8 },
   input: { flex: 1, paddingVertical: 14, fontSize: 15, color: colors.gray900 },
   eyeIcon: { fontSize: 16, padding: 4 },
-  loginBtn: { backgroundColor: colors.primary, borderRadius: 14, padding: 16, alignItems: 'center', marginTop: 8, ...shadows.red },
+  loginBtn: {
+    backgroundColor: colors.primary, borderRadius: 14, padding: 16,
+    alignItems: 'center', marginTop: 8, ...shadows.red,
+  },
   loginBtnDisabled: { opacity: 0.7 },
   loginBtnText: { color: colors.white, fontSize: 16, fontWeight: 'bold', letterSpacing: 0.5 },
-  registerLink: { marginTop: 20, alignItems: 'center' },
-  registerLinkText: { fontSize: 14, color: colors.gray500 },
-  registerLinkBold: { color: colors.primary, fontWeight: '600' },
+  registerBtn: {
+    marginTop: 16, padding: 14, borderRadius: 14,
+    borderWidth: 2, borderColor: colors.primary, alignItems: 'center',
+  },
+  registerBtnText: { color: colors.primary, fontSize: 16, fontWeight: 'bold' },
   footer: { paddingBottom: 20, alignItems: 'center', backgroundColor: colors.white },
   footerText: { fontSize: 12, color: colors.gray400 },
 });

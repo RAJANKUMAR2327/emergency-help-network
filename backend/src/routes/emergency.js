@@ -5,6 +5,7 @@ const {
   acceptEmergency,
   updateResponderLocation,
   resolveEmergency,
+  cancelEmergency,
   getActiveEmergencies,
   getSingleEmergency,
 } = require('../controllers/emergencyController');
@@ -18,5 +19,6 @@ router.get('/:id', getSingleEmergency);
 router.post('/:id/accept', acceptEmergency);
 router.put('/:id/location', updateResponderLocation);
 router.put('/:id/resolve', resolveEmergency);
+router.put('/:id/cancel', cancelEmergency);
 
 module.exports = router;

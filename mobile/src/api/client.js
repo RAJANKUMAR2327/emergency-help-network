@@ -5,7 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export const API_URL = 'https://ehn-api-proxy.rajankumar20030306.workers.dev/api';
 
 // Socket.io connects DIRECTLY to Railway backend (Workers don't support WebSocket upgrades)
-export const SOCKET_URL = 'https://your-railway-backend.up.railway.app';
+export const SOCKET_URL = 'https://emergency-help-network.onrender.com';
 
 const client = axios.create({ baseURL: API_URL, timeout: 10000 });
 

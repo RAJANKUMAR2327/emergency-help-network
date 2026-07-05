@@ -30,7 +30,8 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# env files — .env holds the real Google Maps key locally, never commit it
+.env
 .env*.local
 
 # typescript
@@ -39,3 +40,10 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# one-off patch/fix scripts — archive instead of committing loose to root
+fix*.js
+add*.js
+write*.js
+redesign.js
+auditImports.js

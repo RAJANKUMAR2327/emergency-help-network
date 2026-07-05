@@ -8,11 +8,12 @@ const {
   sendTestAlert,
 } = require('../controllers/notificationController');
 const { protect } = require('../middleware/auth');
+const { validateContact } = require('../middleware/validate');
 
 router.use(protect);
 router.get('/contacts', getEmergencyContacts);
-router.post('/contacts', addEmergencyContact);
-router.put('/contacts/:contactId', updateEmergencyContact);
+router.post('/contacts', validateContact, addEmergencyContact);
+router.put('/contacts/:contactId', validateContact, updateEmergencyContact);
 router.delete('/contacts/:contactId', deleteEmergencyContact);
 router.post('/test', sendTestAlert);
 

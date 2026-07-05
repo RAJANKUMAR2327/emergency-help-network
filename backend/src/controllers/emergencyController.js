@@ -1,10 +1,46 @@
 const { orchestrateNotifications } = require('../services/notificationOrchestrator');
 const Emergency = require('../models/Emergency');
 const User = require('../models/User');
+const Message = require('../models/Message');
+
+// Minimum time a reporter must wait between triggering emergencies,
+// regardless of the previous one's status. Prevents rapid-fire spam
+// immediately after cancelling/resolving one — each trigger fires a full
+// SMS/WhatsApp/call/email/push cascade, which has both a real cost
+// (Twilio charges per message/call) and a trust cost (helpers who get
+// spammed with false alerts stop responding to real ones).
+const TRIGGER_COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes
 
 exports.triggerEmergency = async (req, res, next) => {
   try {
     const { type, severity, description, longitude, latitude, address } = req.body;
+
+    // Block a second emergency while one is still open. A user in a
+    // genuinely worsening situation should update/escalate the existing
+    // one (future feature), not spawn a duplicate that splits responder
+    // attention and double-notifies the same contacts.
+    const existingActive = await Emergency.findOne({
+      reporter: req.user._id,
+      status: { $in: ['active', 'responded'] },
+    });
+    if (existingActive) {
+      return res.status(409).json({
+        success: false,
+        message: 'You already have an active emergency in progress. Cancel or resolve it before reporting a new one.',
+        existingEmergencyId: existingActive._id,
+      });
+    }
+
+    // Cooldown against rapid re-triggering, checked against the reporter's
+    // most recent emergency of any status.
+    const lastEmergency = await Emergency.findOne({ reporter: req.user._id }).sort({ createdAt: -1 });
+    if (lastEmergency && Date.now() - new Date(lastEmergency.createdAt).getTime() < TRIGGER_COOLDOWN_MS) {
+      const waitSeconds = Math.ceil((TRIGGER_COOLDOWN_MS - (Date.now() - new Date(lastEmergency.createdAt).getTime())) / 1000);
+      return res.status(429).json({
+        success: false,
+        message: `Please wait ${waitSeconds}s before reporting another emergency. If this is a genuine emergency, call 112 immediately.`,
+      });
+    }
 
     const emergency = await Emergency.create({
       reporter: req.user._id,
@@ -195,6 +231,85 @@ exports.cancelEmergency = async (req, res, next) => {
   }
 };
 
+// New: lets the reporter themselves flag their own report as a false
+// alarm — distinct from "cancel" (which just means "I no longer need
+// help", e.g. a friend showed up). False alarm means "this shouldn't
+// have been sent" — tracked separately on the user's stats so repeated
+// false alarms are visible for manual review later, without any
+// automatic punishment baked in here.
+exports.markFalseAlarm = async (req, res, next) => {
+  try {
+    const emergency = await Emergency.findById(req.params.id);
+    if (!emergency) return res.status(404).json({ success: false, message: 'Not found' });
+    if (emergency.reporter.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Only the reporter can mark this as a false alarm' });
+    }
+    if (!['active', 'responded'].includes(emergency.status)) {
+      return res.status(400).json({ success: false, message: 'This emergency is already closed' });
+    }
+
+    emergency.status = 'false_alarm';
+    emergency.timeline.push({ event: 'Marked as false alarm by reporter', actor: req.user._id });
+    await emergency.save();
+
+    await User.findByIdAndUpdate(req.user._id, { $inc: { 'stats.falseAlarmCount': 1 } });
+
+    const io = req.app.get('io');
+    if (io) io.to(`emergency_${emergency._id}`).emit('emergency_resolved', { emergencyId: emergency._id, reason: 'false_alarm' });
+
+    res.status(200).json({ success: true, data: emergency });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Lets the reporter rate a responder (1-5) after the emergency is
+// resolved — feeds into the responder's stats.averageRating, shown as a
+// trust signal to future reporters deciding whether to wait for a
+// specific helper or hope someone else responds too.
+exports.rateResponder = async (req, res, next) => {
+  try {
+    const { rating } = req.body;
+    const emergency = await Emergency.findById(req.params.id);
+    if (!emergency) return res.status(404).json({ success: false, message: 'Not found' });
+
+    if (emergency.reporter.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Only the reporter can rate responders' });
+    }
+    if (!['resolved', 'cancelled'].includes(emergency.status)) {
+      return res.status(400).json({ success: false, message: 'Can only rate responders after the emergency is closed' });
+    }
+
+    const responder = emergency.responders.id(req.params.responderId);
+    if (!responder) return res.status(404).json({ success: false, message: 'Responder not found on this emergency' });
+    if (responder.rating) return res.status(400).json({ success: false, message: 'This responder has already been rated for this emergency' });
+
+    responder.rating = rating;
+    responder.ratedAt = new Date();
+    await emergency.save();
+
+    // Recompute the responder's average rating across every emergency
+    // they've ever responded to and been rated on. Recomputing fresh each
+    // time (rather than maintaining a running sum/count) keeps it always
+    // consistent and ratings are infrequent enough that this is cheap.
+    const agg = await Emergency.aggregate([
+      { $match: { 'responders.user': responder.user, 'responders.rating': { $exists: true } } },
+      { $unwind: '$responders' },
+      { $match: { 'responders.user': responder.user, 'responders.rating': { $exists: true } } },
+      { $group: { _id: '$responders.user', avg: { $avg: '$responders.rating' } } },
+    ]);
+
+    if (agg.length > 0) {
+      await User.findByIdAndUpdate(responder.user, { 'stats.averageRating': Math.round(agg[0].avg * 10) / 10 });
+    }
+
+    res.status(200).json({ success: true, data: emergency });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
 exports.getActiveEmergencies = async (req, res, next) => {
   try {
     const { longitude, latitude, radius = 5000 } = req.query;
@@ -217,7 +332,7 @@ exports.getActiveEmergencies = async (req, res, next) => {
 
     const emergencies = await Emergency.find(query)
       .populate('reporter', 'name phone bloodGroup medicalInfo')
-      .populate('responders.user', 'name phone')
+      .populate('responders.user', 'name phone isVerified stats.averageRating')
       .sort({ createdAt: -1 })
       .limit(50);
 
@@ -231,10 +346,69 @@ exports.getSingleEmergency = async (req, res, next) => {
   try {
     const emergency = await Emergency.findById(req.params.id)
       .populate('reporter', 'name phone bloodGroup medicalInfo profilePhoto')
-      .populate('responders.user', 'name phone role');
+      .populate('responders.user', 'name phone role isVerified stats.averageRating');
 
     if (!emergency) return res.status(404).json({ success: false, message: 'Not found' });
     res.status(200).json({ success: true, data: emergency });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Shared check: only the reporter or an accepted responder may read/send
+// chat messages for an emergency — anyone else with a valid token
+// shouldn't be able to read a stranger's emergency chat just by guessing
+// or being handed an ID.
+async function assertChatAccess(emergencyId, userId) {
+  const emergency = await Emergency.findById(emergencyId).select('reporter responders');
+  if (!emergency) return { emergency: null, allowed: false };
+  const isReporter = emergency.reporter.toString() === userId.toString();
+  const isResponder = emergency.responders.some((r) => r.user.toString() === userId.toString());
+  return { emergency, allowed: isReporter || isResponder };
+}
+
+exports.getMessages = async (req, res, next) => {
+  try {
+    const { allowed } = await assertChatAccess(req.params.id, req.user._id);
+    if (!allowed) return res.status(403).json({ success: false, message: 'Not authorized to view this chat' });
+
+    const messages = await Message.find({ emergency: req.params.id })
+      .sort({ createdAt: 1 })
+      .limit(200);
+
+    res.status(200).json({ success: true, data: messages });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// REST fallback for sending — the socket path (emergencySocket.js) is the
+// primary one for live delivery, but this lets a message go through (and
+// get persisted) even if the socket briefly disconnected.
+exports.postMessage = async (req, res, next) => {
+  try {
+    const { allowed } = await assertChatAccess(req.params.id, req.user._id);
+    if (!allowed) return res.status(403).json({ success: false, message: 'Not authorized to send in this chat' });
+
+    const message = await Message.create({
+      emergency: req.params.id,
+      sender: req.user._id,
+      senderName: req.user.name,
+      text: req.body.text,
+    });
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`emergency_${req.params.id}`).emit('new_message', {
+        _id: message._id,
+        from: message.senderName,
+        senderId: req.user._id,
+        message: message.text,
+        timestamp: message.createdAt,
+      });
+    }
+
+    res.status(201).json({ success: true, data: message });
   } catch (error) {
     next(error);
   }

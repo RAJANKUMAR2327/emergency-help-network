@@ -9,11 +9,32 @@ const userSchema = new mongoose.Schema({
   isVerified: { type: Boolean, default: false },
   isAvailable: { type: Boolean, default: true },
   location: { type: { type: String, enum: ['Point'], default: 'Point' }, coordinates: { type: [Number], default: [0,0] } },
+  // When location was last updated — used by the SMS SOS fallback to
+  // decide whether a stored location is fresh enough to trust, since an
+  // SMS-triggered emergency has no live GPS of its own.
+  locationUpdatedAt: { type: Date },
   bloodGroup: { type: String, enum: ['A+','A-','B+','B-','AB+','AB-','O+','O-'] },
   medicalInfo: { type: String, maxlength: 500 },
+  // Blood donor opt-in — deliberately separate from just "having a blood
+  // group on file". A user's blood group may be recorded for their own
+  // emergency medical info without them wanting to be searchable as a
+  // donor by strangers; this keeps the two consented separately.
+  isDonor: { type: Boolean, default: false },
+  lastDonationDate: { type: Date },
   profilePhoto: { type: String },
   fcmToken: { type: String },
-  stats: { emergenciesReported: { type: Number, default: 0 }, helpProvided: { type: Number, default: 0 }, responseRate: { type: Number, default: 100 }, averageRating: { type: Number, default: 5 } },
+  stats: {
+    emergenciesReported: { type: Number, default: 0 },
+    helpProvided: { type: Number, default: 0 },
+    responseRate: { type: Number, default: 100 },
+    averageRating: { type: Number, default: 5 },
+    // Tracks emergencies the reporter themselves marked as false alarms.
+    // Not used to auto-restrict anyone yet — that's a moderation policy
+    // decision, not something to hardcode — but it's tracked so you have
+    // the data if you want to build that later (e.g. flag accounts above
+    // a threshold for manual review).
+    falseAlarmCount: { type: Number, default: 0 },
+  },
 }, { timestamps: true });
 userSchema.index({ location: '2dsphere' });
 userSchema.pre('save', async function () {

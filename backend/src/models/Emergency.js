@@ -22,6 +22,10 @@ const emergencySchema = new mongoose.Schema(
       enum: ['active', 'responded', 'resolved', 'cancelled', 'false_alarm'],
       default: 'active',
     },
+    // How this emergency was triggered — lets the SMS CANCEL flow find
+    // "the SMS-sourced emergency I just created" specifically, and is
+    // generally useful for knowing how the offline fallback gets used.
+    source: { type: String, enum: ['app', 'sms'], default: 'app' },
     description: { type: String, maxlength: 1000 },
     photos: [{ type: String }],
 
@@ -49,6 +53,11 @@ const emergencySchema = new mongoose.Schema(
           type: { type: String, enum: ['Point'], default: 'Point' },
           coordinates: [Number],
         },
+        // Set once by the reporter after the emergency resolves. Not
+        // required — a responder who never gets rated just doesn't
+        // affect their average, rather than being penalized.
+        rating: { type: Number, min: 1, max: 5 },
+        ratedAt: { type: Date },
       },
     ],
 

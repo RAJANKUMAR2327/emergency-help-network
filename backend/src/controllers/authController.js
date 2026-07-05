@@ -70,6 +70,9 @@ exports.updateLocation = async (req, res) => {
     }
     await User.findByIdAndUpdate(req.user._id, {
       location: { type: 'Point', coordinates: [parseFloat(longitude), parseFloat(latitude)] },
+      // Tracked so the SMS SOS fallback (no live GPS of its own) knows
+      // whether this stored location is fresh enough to trust.
+      locationUpdatedAt: new Date(),
     });
     res.status(200).json({ success: true, message: 'Location updated' });
   } catch (error) {

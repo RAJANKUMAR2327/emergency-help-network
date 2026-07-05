@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { EmergencyProvider } from './src/context/EmergencyContext';
+import { LanguageProvider } from './src/context/LanguageContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import client from './src/api/client';
 
@@ -52,10 +53,12 @@ function AppInner() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <EmergencyProvider>
-        <AppInner />
-      </EmergencyProvider>
-    </AuthProvider>
+    <LanguageProvider>
+      <AuthProvider>
+        <EmergencyProvider>
+          <AppInner />
+        </EmergencyProvider>
+      </AuthProvider>
+    </LanguageProvider>
   );
 }

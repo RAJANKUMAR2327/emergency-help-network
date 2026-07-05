@@ -1,5 +1,13 @@
-// Must be the very first line — Sentry needs to patch modules before
-// anything else requires them.
+// Force Node's DNS resolver to use a known-working server — works around
+// a Windows issue where Node picks the wrong network adapter's DNS
+// config even when other adapters (e.g. VirtualBox virtual adapters)
+// have no DNS set, causing MongoDB SRV lookups to fail locally even
+// though the OS-level DNS is configured correctly. Harmless on Render/
+// production Linux hosts, where this isn't an issue anyway.
+require('dns').setServers(['8.8.8.8', '1.1.1.1']);
+
+// Must be the very first require after that — Sentry needs to patch
+// modules before anything else requires them.
 require('./instrument');
 
 require('dotenv').config();
